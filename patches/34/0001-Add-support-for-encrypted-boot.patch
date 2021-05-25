@@ -1,0 +1,139 @@
+From a320e3b47db0f936292f7bf5be76974a8c1f17dc Mon Sep 17 00:00:00 2001
+From: Andrew Gunnerson <chillermillerlong@hotmail.com>
+Date: Mon, 24 May 2021 18:16:47 -0400
+Subject: [PATCH] Add support for encrypted /boot
+
+This commit makes the following changes to allow installing a Fedora
+system with an encrypted /boot volume:
+
+* Remove checks that block /boot from being on encrypted volumes.
+* Add check to ensure that /boot cannot live on LUKS2, only LUKS1.
+* On UEFI systems, add the appropriate `cryptomount -u <UUID>` line to
+  /boot/efi/EFI/fedora/grub.cfg so that it can mount the boot volume.
+* Add `GRUB_ENABLE_CRYPTODISK=1` to /etc/default/grub. This only has an
+  effect on systems that use grub2-install (non-UEFI Secure Boot).
+
+Signed-off-by: Andrew Gunnerson <chillermillerlong@hotmail.com>
+---
+ pyanaconda/modules/storage/bootloader/base.py | 23 ++++++++++++++++++-
+ pyanaconda/modules/storage/bootloader/efi.py  |  6 ++++-
+ .../modules/storage/bootloader/grub2.py       |  9 +++++++-
+ .../storage/partitioning/interactive/utils.py |  3 ---
+ 4 files changed, 35 insertions(+), 6 deletions(-)
+
+diff --git a/pyanaconda/modules/storage/bootloader/base.py b/pyanaconda/modules/storage/bootloader/base.py
+index 71ca9c5c4..46cf63c6e 100644
+--- a/pyanaconda/modules/storage/bootloader/base.py
++++ b/pyanaconda/modules/storage/bootloader/base.py
+@@ -168,7 +168,7 @@ class BootLoader(object):
+     keep_boot_order = False
+     keep_mbr = False
+     image_label_attr = "label"
+-    encryption_support = False
++    encryption_support = True
+     stage2_is_valid_stage1 = False
+ 
+     # requirements for stage2 devices
+@@ -615,6 +615,20 @@ class BootLoader(object):
+     # boot/stage2 device access
+     #
+ 
++    def find_luks_parent(self, device=None):
++        if device is None:
++            device = self.stage2_device
++
++        if device.format.type == 'luks':
++            return device
++
++        for parent in device.parents:
++            ret = self.find_luks_parent(parent)
++            if ret:
++                return ret
++
++        return None
++
+     def is_valid_stage2_device(self, device, linux=True, non_linux=False):
+         """ Return True if the device is suitable as a stage2 target device.
+ 
+@@ -690,6 +704,13 @@ class BootLoader(object):
+                                  "device.") % _(self.stage2_description))
+             valid = False
+ 
++        if device.encrypted:
++            luks_parent = self.find_luks_parent(device)
++            if luks_parent and luks_parent.format.luks_version == 'luks2':
++                self.errors.append(_("%s must use LUKS1 instead of LUKS2.")
++                                   % _(self.stage2_description))
++                valid = False
++
+         log.debug("is_valid_stage2_device(%s) returning %s", device.name, valid)
+         return valid
+ 
+diff --git a/pyanaconda/modules/storage/bootloader/efi.py b/pyanaconda/modules/storage/bootloader/efi.py
+index 82f60e4c4..afc833f46 100644
+--- a/pyanaconda/modules/storage/bootloader/efi.py
++++ b/pyanaconda/modules/storage/bootloader/efi.py
+@@ -185,6 +185,11 @@ class EFIGRUB(EFIBase, GRUB2):
+             if not grub_dir:
+                 raise BootLoaderError("Could not get GRUB directory path")
+ 
++            luks_parent = self.find_luks_parent()
++            if luks_parent:
++                luks_uuid = luks_parent.format.uuid.replace('-', '')
++                fd.write("cryptomount -u %s\n" % luks_uuid)
++
+             fd.write("search --no-floppy --fs-uuid --set=dev %s\n" % fs_uuid)
+             fd.write("set prefix=($dev)%s\n" % grub_dir)
+             fd.write("export $prefix\n")
+@@ -192,7 +197,6 @@ class EFIGRUB(EFIBase, GRUB2):
+ 
+         super().write_config()
+ 
+-
+ class Aarch64EFIGRUB(EFIGRUB):
+     _serial_consoles = ["ttyAMA", "ttyS"]
+     _efi_binary = "\\shimaa64.efi"
+diff --git a/pyanaconda/modules/storage/bootloader/grub2.py b/pyanaconda/modules/storage/bootloader/grub2.py
+index add7dc970..45658b227 100644
+--- a/pyanaconda/modules/storage/bootloader/grub2.py
++++ b/pyanaconda/modules/storage/bootloader/grub2.py
+@@ -115,7 +115,8 @@ class GRUB2(BootLoader):
+     stage2_must_be_primary = False
+ 
+     # requirements for boot devices
+-    stage2_device_types = ["partition", "mdarray", "btrfs volume", "btrfs subvolume"]
++    stage2_device_types = ["partition", "mdarray", "btrfs volume", "btrfs subvolume",
++                           "luks/dm-crypt"]
+     stage2_raid_levels = [raid.RAID0, raid.RAID1, raid.RAID4,
+                           raid.RAID5, raid.RAID6, raid.RAID10]
+     stage2_raid_member_types = ["partition"]
+@@ -283,6 +284,12 @@ class GRUB2(BootLoader):
+ 
+         if self.use_bls:
+             defaults.write("GRUB_ENABLE_BLSCFG=true\n")
++
++        # Only required for non-UEFI Secure Boot, but doesn't hurt to leave it
++        # always enabled
++        if self.stage2_device.encrypted:
++            defaults.write("GRUB_ENABLE_CRYPTODISK=1\n")
++
+         defaults.close()
+ 
+     def _encrypt_password(self):
+diff --git a/pyanaconda/modules/storage/partitioning/interactive/utils.py b/pyanaconda/modules/storage/partitioning/interactive/utils.py
+index e5f108d7f..3d3383be9 100644
+--- a/pyanaconda/modules/storage/partitioning/interactive/utils.py
++++ b/pyanaconda/modules/storage/partitioning/interactive/utils.py
+@@ -432,9 +432,6 @@ def validate_device_factory_request(storage, request: DeviceFactoryRequest):
+             type=_(DEVICE_TEXT_MAP[devicefactory.DEVICE_TYPE_PARTITION])
+         )
+ 
+-    if mount_point and encrypted and mount_point.startswith("/boot"):
+-        return _("{} cannot be encrypted").format(mount_point)
+-
+     if encrypted and fs_type in PARTITION_ONLY_FORMAT_TYPES:
+         return _("{} cannot be encrypted").format(fs_type)
+ 
+-- 
+2.31.1
+
