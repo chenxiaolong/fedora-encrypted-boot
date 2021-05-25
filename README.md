@@ -68,6 +68,12 @@ While it's not very likely for the patch to break things, it has only been teste
         * FAT32 -> /boot/efi
     * /dev/sda2
         * ext4 -> /
+* Fedora 34 on BIOS with encrypted boot on btrfs
+    * /dev/sda1
+        * LUKS1
+            * btrfs
+                * root -> /
+                * boot -> /boot
 
 ## LICENSE
 
