@@ -6,10 +6,10 @@ This repo provides a simple patch to the Anaconda installer to allow Fedora 34+ 
 
 1. Boot into the Fedora live image. Make sure the Anaconda installer is closed if it is open.
 
-2. Ensure the `patch` command is installed.
+2. Ensure `git` and `patch` are installed.
 
     ```bash
-    sudo dnf install patch
+    sudo dnf install git patch
     ```
 
 3. Clone this git repository.
