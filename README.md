@@ -37,7 +37,7 @@ The patch makes the following changes to the Anaconda installer:
 * Removes the checks that prevent `/boot` from being located on an encrypted volume.
 * Adds an additional check to ensure that `/boot` cannot be located on LUKS2-encrypted volumes.
 * On UEFI systems, adds the appropriate `cryptomount -u <UUID>` line to `/boot/efi/EFI/fedora/grub.cfg` so that GRUB can decrypt LUKS and find the boot volume.
-* Adds `GRUB_ENABLE_CRYPTODISK=1` to `/etc/default/grub` so that the relevant cryptodisk modules are included in the GRUB image. This has no effect on UEFI Secure Boot systems since those use a prebuilt signed build of `grubx64.efi`.
+* Adds `GRUB_ENABLE_CRYPTODISK=y` to `/etc/default/grub` so that the relevant cryptodisk modules are included in the GRUB image. This has no effect on UEFI Secure Boot systems since those use a prebuilt signed build of `grubx64.efi`.
 
 ## Limitations
 

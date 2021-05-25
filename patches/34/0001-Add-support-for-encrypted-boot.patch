@@ -1,4 +1,4 @@
-From a320e3b47db0f936292f7bf5be76974a8c1f17dc Mon Sep 17 00:00:00 2001
+From b504f3b3bbbdf5d3ad0dc6d87c23b9a7dad25207 Mon Sep 17 00:00:00 2001
 From: Andrew Gunnerson <chillermillerlong@hotmail.com>
 Date: Mon, 24 May 2021 18:16:47 -0400
 Subject: [PATCH] Add support for encrypted /boot
@@ -94,7 +94,7 @@ index 82f60e4c4..afc833f46 100644
      _serial_consoles = ["ttyAMA", "ttyS"]
      _efi_binary = "\\shimaa64.efi"
 diff --git a/pyanaconda/modules/storage/bootloader/grub2.py b/pyanaconda/modules/storage/bootloader/grub2.py
-index add7dc970..45658b227 100644
+index add7dc970..8b7ecf160 100644
 --- a/pyanaconda/modules/storage/bootloader/grub2.py
 +++ b/pyanaconda/modules/storage/bootloader/grub2.py
 @@ -115,7 +115,8 @@ class GRUB2(BootLoader):
@@ -115,7 +115,7 @@ index add7dc970..45658b227 100644
 +        # Only required for non-UEFI Secure Boot, but doesn't hurt to leave it
 +        # always enabled
 +        if self.stage2_device.encrypted:
-+            defaults.write("GRUB_ENABLE_CRYPTODISK=1\n")
++            defaults.write("GRUB_ENABLE_CRYPTODISK=y\n")
 +
          defaults.close()
  
