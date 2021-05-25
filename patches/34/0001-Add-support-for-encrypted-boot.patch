@@ -1,4 +1,4 @@
-From b504f3b3bbbdf5d3ad0dc6d87c23b9a7dad25207 Mon Sep 17 00:00:00 2001
+From 9cd7880f9eca273e1844e7085378c98a197f3f31 Mon Sep 17 00:00:00 2001
 From: Andrew Gunnerson <chillermillerlong@hotmail.com>
 Date: Mon, 24 May 2021 18:16:47 -0400
 Subject: [PATCH] Add support for encrypted /boot
@@ -17,9 +17,9 @@ Signed-off-by: Andrew Gunnerson <chillermillerlong@hotmail.com>
 ---
  pyanaconda/modules/storage/bootloader/base.py | 23 ++++++++++++++++++-
  pyanaconda/modules/storage/bootloader/efi.py  |  6 ++++-
- .../modules/storage/bootloader/grub2.py       |  9 +++++++-
+ .../modules/storage/bootloader/grub2.py       | 12 +++++++++-
  .../storage/partitioning/interactive/utils.py |  3 ---
- 4 files changed, 35 insertions(+), 6 deletions(-)
+ 4 files changed, 38 insertions(+), 6 deletions(-)
 
 diff --git a/pyanaconda/modules/storage/bootloader/base.py b/pyanaconda/modules/storage/bootloader/base.py
 index 71ca9c5c4..46cf63c6e 100644
@@ -94,7 +94,7 @@ index 82f60e4c4..afc833f46 100644
      _serial_consoles = ["ttyAMA", "ttyS"]
      _efi_binary = "\\shimaa64.efi"
 diff --git a/pyanaconda/modules/storage/bootloader/grub2.py b/pyanaconda/modules/storage/bootloader/grub2.py
-index add7dc970..8b7ecf160 100644
+index add7dc970..a545cf974 100644
 --- a/pyanaconda/modules/storage/bootloader/grub2.py
 +++ b/pyanaconda/modules/storage/bootloader/grub2.py
 @@ -115,7 +115,8 @@ class GRUB2(BootLoader):
@@ -120,6 +120,16 @@ index add7dc970..8b7ecf160 100644
          defaults.close()
  
      def _encrypt_password(self):
+@@ -437,6 +444,9 @@ class GRUB2(BootLoader):
+ 
+         try:
+             self.write_device_map()
++            # Write /etc/default/grub once first since grub2-install requires it
++            # for GRUB_ENABLE_CRYPTODISK when /boot is encrypted
++            self.write_defaults()
+             self.stage2_device.format.sync(root=conf.target.physical_root)
+             os.sync()
+             self.install()
 diff --git a/pyanaconda/modules/storage/partitioning/interactive/utils.py b/pyanaconda/modules/storage/partitioning/interactive/utils.py
 index e5f108d7f..3d3383be9 100644
 --- a/pyanaconda/modules/storage/partitioning/interactive/utils.py
