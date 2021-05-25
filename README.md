@@ -41,9 +41,37 @@ The patch makes the following changes to the Anaconda installer:
 
 ## Limitations
 
+### Default partition layout
+
 The patch does not change the suggested partition layouts that Anaconda offers. For example, the default btrfs partition layout still creates a separate ext4-formatted `/boot` partition. This default layout can be freely customized as desired or a new partition layout can be created from scratch.
 
-Also, the patch adds a check to make sure `/boot` is on a LUKS1-formatted volume instead of LUKS2 (if encrypted). This is because GRUB2's support for LUKS2 is not quite ready yet. On UEFI (with Secure Boot), Fedora's prebuilt `grubx64.efi` executable does not include the required modules. On other systems, `grub2-install` currently does not detect the correct modules to include either. Additionally, the default KDF of LUKS2 (Argon2i) is not supported.
+### LUKS2-encrypted `/boot` not allowed
+
+The patch adds a check to make sure `/boot` is on a LUKS1-formatted volume instead of LUKS2 (if encrypted). This is because GRUB2's support for LUKS2 is not quite ready yet. On UEFI (with Secure Boot), Fedora's prebuilt `grubx64.efi` executable does not include the required modules. On other systems, `grub2-install` currently does not detect the correct modules to include either. Additionally, the default KDF of LUKS2 (Argon2i) is not supported.
+
+### LUKS decryption in GRUB2 is slow
+
+GRUB's implementation of LUKS is not as fast as the implementation in the Linux kernel. As a very rough estimate, with a Kaby Lake Core i7 7700HQ, a LUKS key slot using ~2 million PBKDF2 iterations can be decrypted by the kernel in a couple seconds while it takes GRUB more than 30 seconds.
+
+The current number of PBKDF2 iterations can be queried by running:
+
+```bash
+sudo cryptsetup luksDump <LUKS block device>
+```
+
+The number of iterations can be reduced to speed up decryption in GRUB, but should only be done if the password has sufficient entropy. Before making any changes, see cryptsetup's documentation about this topic: https://gitlab.com/cryptsetup/cryptsetup/-/wikis/FrequentlyAskedQuestions#3-common-problems (section 3.4).
+
+If the tradeoffs of reducing the PBKDF2 iterations are acceptable, create a new key slot with the desired number of iterations. The new passphrase can be the same as the existing passphrase.
+
+```bash
+sudo cryptsetup luksAddKey --pbkdf-force-iterations <iterations> <LUKS block device>
+```
+
+Then, disable the old key slot (default slot is 0).
+
+```bash
+sudo cryptsetup luksKillSlot <LUKS block device> 0
+```
 
 ## Tested Scenarios
 
