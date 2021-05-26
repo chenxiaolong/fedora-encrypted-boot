@@ -59,7 +59,7 @@ The current number of PBKDF2 iterations can be queried by running:
 sudo cryptsetup luksDump <LUKS block device>
 ```
 
-The number of iterations can be reduced to speed up decryption in GRUB, but should only be done if the password has sufficient entropy. Before making any changes, see cryptsetup's documentation about this topic: https://gitlab.com/cryptsetup/cryptsetup/-/wikis/FrequentlyAskedQuestions#3-common-problems (section 3.4).
+The number of iterations can be reduced to speed up decryption in GRUB, but should only be done if the passphrase has sufficient entropy. Before making any changes, see cryptsetup's documentation about this topic: https://gitlab.com/cryptsetup/cryptsetup/-/wikis/FrequentlyAskedQuestions#3-common-problems (section 3.4).
 
 If the tradeoffs of reducing the PBKDF2 iterations are acceptable, create a new key slot with the desired number of iterations. The new passphrase can be the same as the existing passphrase.
 
@@ -72,6 +72,42 @@ Then, disable the old key slot (default slot is 0).
 ```bash
 sudo cryptsetup luksKillSlot <LUKS block device> 0
 ```
+
+### Passphrase needs to be entered twice
+
+With an encrypted `/boot` volume, the LUKS passphrase needs to be entered twice during the boot process: once in GRUB and once in plymouth (Linux). There is currently no way for GRUB to securely pass the passphrase to Linux.
+
+This can be annoying and can be worked around by including a key file in the initramfs. **While the key file is encrypted at rest, any process with root privileges will be able to read it.** This is far less secure than having a passphrase that only exists in (human) memory.
+
+To add a key to the initramfs anyway:
+
+1. Generate a key file.
+
+2. Add the key file as a new key slot.
+
+    ```bash
+    sudo cryptsetup luksAddKey <LUKS block device> <key file>
+    ```
+
+3. Update `/etc/crypttab` to point to the key file.
+
+4. Add a dracut config file to include the key file in the initramfs image.
+
+    ```bash
+    echo 'install_items+=" <key file> "' | sudo tee /etc/dracut.conf.d/99-key.conf
+    ```
+
+5. Regenerate all the initramfs images.
+
+    ```bash
+    sudo dracut -vf --regenerate-all
+    ```
+
+6. Verify that the initramfs images are only readable by root.
+
+    ```bash
+    sudo ls -l /boot/initramfs-*
+    ```
 
 ## Tested Scenarios
 
