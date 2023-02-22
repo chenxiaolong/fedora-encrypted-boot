@@ -1,3 +1,5 @@
+**NOTE**: This is no longer maintained because I've switched to using UKIs + systemd-boot.
+
 # Fedora Encrypted /boot
 
 This repo provides a simple patch to the Anaconda installer to allow Fedora 34+ systems to be installed with LUKS1-encrypted `/boot` partitions.
